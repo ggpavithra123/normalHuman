@@ -8,9 +8,9 @@ export default async function handler(req: any, res: any) {
   }
 
   const WEBHOOK_SECRET = process.env.CLERK_WEBHOOK_SECRET;
-  if (!WEBHOOK_SECRET) {
+  if (!WEBHOOK_SECRET ) {
     return res.status(400).send("Missing secret");
-  }
+  }     
 
   // 1️⃣ Get headers directly from Node
   const svix_id = req.headers["svix-id"] as string;
