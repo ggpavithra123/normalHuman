@@ -1,34 +1,37 @@
-// import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
-// import { type NextRequest } from "next/server";
+import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
+import { type NextRequest } from "next/server";
+import { appRouter } from "@/server/api/root";
+import { createTRPCContext } from "@/server/api/trpc";
+import dotenv from "dotenv";
 
-// //import { env } from "../../env";
-// import { appRouter } from "@/server/api/root";
-// import { createTRPCContext } from "@/server/api/trpc";
+// Load .env file
+dotenv.config();
 
-// /**
-//  * This wraps the `createTRPCContext` helper and provides the required context for the tRPC API when
-//  * handling a HTTP request (e.g. when you make requests from Client Components).
-//  */
-// const createContext = async (req: NextRequest) => {
-//   return createTRPCContext({
-//     headers: req.headers,
-//   });
-// };
+// Log to confirm envs (optional)
+console.log("✅ DATABASE_URL:", process.env.DATABASE_URL);
+console.log("✅ CLERK_PUBLISHABLE_KEY:", process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
 
-// const handler = (req: NextRequest) =>
-//   fetchRequestHandler({
-//     endpoint: "/api/trpc",
-//     req,
-//     router: appRouter,
-//     createContext: () => createContext(req),
-//     onError:
-//       env.NODE_ENV === "development"
-//         ? ({ path, error }) => {
-//             console.error(
-//               `❌ tRPC failed on ${path ?? "<no-path>"}: ${error.message}`
-//             );
-//           }
-//         : undefined,
-//   });
+const createContext = async (req: NextRequest) => {
+  return createTRPCContext({
+    headers: req.headers,
+  });
+};
 
-// export { handler as GET, handler as POST };
+const handler = (req: NextRequest) =>
+  fetchRequestHandler({
+    endpoint: "/api/trpc",
+    req,
+    router: appRouter,
+    createContext: () => createContext(req),
+    onError:
+      process.env.NODE_ENV === "development"
+        ? ({ path, error }) => {
+            console.error(
+              `❌ tRPC failed on ${path ?? "<no-path>"}: ${error.message}`
+            );
+          }
+        : undefined,
+  });
+
+export { handler as GET, handler as POST };
+
