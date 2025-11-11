@@ -1,13 +1,15 @@
-import { Mail } from '@/app/mail/components/mail'
-import { cookies } from 'next/headers'
+// ✅ This must be a SERVER COMPONENT — do NOT add "use client"
+import { Mail } from "@/app/mail/components/mail";
+import { cookies } from "next/headers";
 
-export default function MailPage() {
+export default async function MailPage() {
+  // ✅ Use await cookies() inside an async server component
+  const cookieStore = await cookies();
+  const layout = cookieStore.get("react-resizable-panels:layout:mail");
+  const collapsed = cookieStore.get("react-resizable-panels:collapsed");
 
-  const layout = cookies().get("react-resizable-panels:layout:mail")
-  const collapsed = cookies().get("react-resizable-panels:collapsed")
-
-  const defaultLayout = layout ? JSON.parse(layout.value) : undefined
-  const defaultCollapsed = collapsed ? JSON.parse(collapsed.value) : undefined
+  const defaultLayout = layout ? JSON.parse(layout.value) : undefined;
+  const defaultCollapsed = collapsed ? JSON.parse(collapsed.value) : undefined;
 
   return (
     <>
@@ -27,6 +29,7 @@ export default function MailPage() {
           className="block dark:hidden"
         />
       </div>
+
       <div className="flex-col hidden md:flex h-screen overflow-scroll">
         <Mail
           defaultLayout={defaultLayout}
@@ -35,5 +38,5 @@ export default function MailPage() {
         />
       </div>
     </>
-  )
+  );
 }

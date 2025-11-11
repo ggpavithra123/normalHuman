@@ -10,13 +10,26 @@ export const getAurinkoAuthorizationUrl = async (serviceType: 'Google' | 'Office
     const { userId } = await auth()
     if (!userId) throw new Error('User not found')
 
-    const user = await db.user.findUnique({
+    // Ensure user exists in database (create if needed)
+    let user = await db.user.findUnique({
         where: {
             id: userId
         }, select: { role: true }
     })
 
-    if (!user) throw new Error('User not found')
+    if (!user) {
+        // User doesn't exist in DB yet, create them with minimal info
+        // The webhook will update it later with correct email/name from Clerk
+        user = await db.user.upsert({
+            where: { id: userId },
+            update: {},
+            create: {
+                id: userId,
+                emailAddress: `${userId}@temp.clerk`, // Temporary, will be updated by webhook
+            },
+            select: { role: true }
+        })
+    }
 
     const isSubscribed = await getSubscriptionStatus()
 

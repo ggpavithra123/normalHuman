@@ -1,27 +1,44 @@
 // playground.ts
-import { db } from "./src/server/db.ts";
+// import { db } from "./src/server/db.ts";
 
-console.log("✅ Loaded DATABASE_URL:", process.env.DATABASE_URL);
+// console.log("✅ Loaded DATABASE_URL:", process.env.DATABASE_URL);
 
-async function main() {
-  await db.user.create({
-    data: {
-      emailAddress: "test@gmail.com",
-      firstName: "Elliott",
-      lastName: "Chong",
-    },
-  });
+// async function main() {
+//   await db.user.create({
+//     data: {
+//       emailAddress: "test@gmail.com",
+//       firstName: "Elliott",
+//       lastName: "Chong",
+//     },
+//   });
 
-  console.log("✅ User created successfully!");
-}
+//   console.log("✅ User created successfully!");
+// }
 
-// Run the async function and handle errors safely
-main()
-  .then(() => process.exit(0))
-  .catch((err) => {
-    console.error("❌ Error creating user:", err);
-    process.exit(1);
-  });
+// // Run the async function and handle errors safely
+// main()
+//   .then(() => process.exit(0))
+//   .catch((err) => {
+//     console.error("❌ Error creating user:", err);
+//     process.exit(1);
+//   });
+
+import Account from "./src/lib/account";
+
+
+const acc = new Account('YuHCXZgyIuCN3s85vOgfbVzvCrr6V96KIzMulckSvNg')
+// console.log(await acc.getUpdatedEmails({
+//   deltaToken: 'H4sIAAAAAAAA_2NgZmBkAAOmtDkMLWAWx7aTDCwZJbk5APef07EdAAAA'
+// }))
+await acc.syncEmails()
+
+
+
+
+
+
+
+
 
 
 // const addressesToUpsert = new Map()

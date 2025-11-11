@@ -32,8 +32,9 @@ export const GET = async (req: NextRequest) => {
         }
     })
     waitUntil(
-
+        
         axios.post(`${process.env.NEXT_PUBLIC_URL}/api/initial-sync`, { accountId: token.accountId.toString(), userId }).then((res) => {
+            console.log("waitUntil called:");
             console.log(res.data)
         }).catch((err) => {
             console.log(err.response.data)

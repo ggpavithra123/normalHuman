@@ -1,5 +1,6 @@
 import { createCallerFactory, createTRPCRouter } from "@/server/api/trpc";
 import { mailRouter } from "./routers/mail";
+import { accountRouter } from "./routers/account";
 import { searchRouter } from "./routers/search";
 import { webhooksRouter } from "./routers/webhooks";
 
@@ -10,6 +11,7 @@ import { webhooksRouter } from "./routers/webhooks";
  */
 export const appRouter = createTRPCRouter({
   mail: mailRouter,
+  account: accountRouter,
   search: searchRouter,
   webhooks: webhooksRouter
 });

@@ -232,7 +232,7 @@ export function ThreadDisplay() {
               )}
             </div>
             <Separator />
-            <div className="max-h-[calc(100vh-500px)] overflow-scroll flex flex-col">
+            <div className="max-h-[calc(500vh-500px)] overflow-scroll flex flex-col">
               <div className="p-6 flex flex-col gap-4">
                 {thread.emails.map(email => {
                   return <EmailDisplay key={email.id} email={email} />

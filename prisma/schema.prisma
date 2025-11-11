@@ -24,7 +24,7 @@ model User {
 
     accounts Account[]
 
-    chatbotInteraction ChatbotInteraction?
+    chatbotInteractions   ChatbotInteraction[]   // one-to-many relation
 }
 
 enum Role {
@@ -33,17 +33,18 @@ enum Role {
 }
 
 model ChatbotInteraction {
-    id String @id @default(cuid())
+  id      String   @id @default(cuid())
+  day     String
+  count   Int      @default(1)
 
-    day   String
-    count Int    @default(1)
+  userId  String?
+  user    User?    @relation(fields: [userId], references: [id])
 
-    userId String? @unique
-    user   User?   @relation(fields: [userId], references: [id])
-
-    @@unique([day, userId])
-    @@index([day, userId])
+  @@unique([day, userId])  // ensures one record per user per day
+  @@index([day, userId])
 }
+
+
 
 model StripeSubscription {
     id        String   @id @default(cuid())
@@ -73,7 +74,7 @@ model Account {
     name         String
 
     nextDeltaToken String?
-
+    createdAt      DateTime @default(now())
     user           User           @relation(fields: [userId], references: [id])
     threads        Thread[]
     emailAddresses EmailAddress[]

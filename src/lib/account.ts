@@ -26,22 +26,22 @@ class Account {
         return response.data;
     }
 
-    async createSubscription() {
-        const webhookUrl = process.env.NODE_ENV === 'development' ? 'https://potatoes-calculator-reports-crisis.trycloudflare.com' : process.env.NEXT_PUBLIC_URL
-        const res = await axios.post('https://api.aurinko.io/v1/subscriptions',
-            {
-                resource: '/email/messages',
-                notificationUrl: webhookUrl + '/api/aurinko/webhook'
-            },
-            {
-                headers: {
-                    'Authorization': `Bearer ${this.token}`,
-                    'Content-Type': 'application/json'
-                }
-            }
-        )
-        return res.data
-    }
+    // async createSubscription() {
+    //     const webhookUrl = process.env.NODE_ENV === 'development' ? 'https://potatoes-calculator-reports-crisis.trycloudflare.com' : process.env.NEXT_PUBLIC_URL
+    //     const res = await axios.post('https://api.aurinko.io/v1/subscriptions',
+    //         {
+    //             resource: '/email/messages',
+    //             notificationUrl: webhookUrl + '/api/aurinko/webhook'
+    //         },
+    //         {
+    //             headers: {
+    //                 'Authorization': `Bearer ${this.token}`,
+    //                 'Content-Type': 'application/json'
+    //             }
+    //         }
+    //     )
+    //     return res.data
+    // }
 
     async syncEmails() {
         const account = await db.account.findUnique({

@@ -1,122 +1,102 @@
-import { create, insert, search, save, load, type AnyOrama } from "@orama/orama";
-import { persist, restore } from "@orama/plugin-data-persistence";
-import { db } from "@/server/db";
-import { getEmbeddings } from "@/lib/embeddings";
+import { create, insertMultiple, Results, search } from "@orama/orama";
 
 export class OramaManager {
-    // @ts-ignore
-    private orama: AnyOrama;
-    private accountId: string;
+  db: any;
+  accountId: string;
+  prisma: any;
 
-    constructor(accountId: string) {
-        this.accountId = accountId;
-    }
+  constructor(accountId: string, prisma: any) {
+    this.accountId = accountId;
+    this.prisma = prisma;
+  }
 
-    async initialize() {
-        const account = await db.account.findUnique({
-            where: { id: this.accountId },
-            select: { binaryIndex: true }
-        });
+  // 🔹 Initialize Orama DB and insert emails
+  async initialize() {
+    if (this.db) return; // Already initialized
 
-        if (!account) throw new Error('Account not found');
+    console.log("🧠 [OramaManager] Initializing Orama DB for account:", this.accountId);
 
-        if (account.binaryIndex) {
-            this.orama = await restore('json', account.binaryIndex as any);
-        } else {
-            this.orama = await create({
-                schema: {
-                    title: "string",
-                    body: "string",
-                    rawBody: "string",
-                    from: 'string',
-                    to: 'string[]',
-                    sentAt: 'string',
-                    embeddings: 'vector[1536]',
-                    threadId: 'string'
-                },
-            });
-            await this.saveIndex();
-        }
-    }
-
-    async insert(document: any) {
-        await insert(this.orama, document);
-        await this.saveIndex();
-    }
-
-    async vectorSearch({ prompt, numResults = 10 }: { prompt: string, numResults?: number }) {
-        const embeddings = await getEmbeddings(prompt)
-        const results = await search(this.orama, {
-            mode: 'hybrid',
-            term: prompt,
-            vector: {
-                value: embeddings,
-                property: 'embeddings'
-            },
-            similarity: 0.80,
-            limit: numResults,
-            // hybridWeights: {
-            //     text: 0.8,
-            //     vector: 0.2,
-            // }
-        })
-        // console.log(results.hits.map(hit => hit.document))
-        return results
-    }
-    async search({ term }: { term: string }) {
-        return await search(this.orama, {
-            term: term,
-        });
-    }
-
-    async saveIndex() {
-        const index = await persist(this.orama, 'json');
-        await db.account.update({
-            where: { id: this.accountId },
-            data: { binaryIndex: index as Buffer }
-        });
-    }
-}
-
-// Usage example:
-async function main() {
-    const oramaManager = new OramaManager('67358');
-    await oramaManager.initialize();
-
-    // Insert a document
-    // const emails = await db.email.findMany({
-    //     where: {
-    //         thread: { accountId: '67358' }
-    //     },
-    //     select: {
-    //         subject: true,
-    //         bodySnippet: true,
-    //         from: { select: { address: true, name: true } },
-    //         to: { select: { address: true, name: true } },
-    //         sentAt: true,
-    //     },
-    //     take: 100
-    // })
-    // await Promise.all(emails.map(async email => {
-    //     // const bodyEmbedding = await getEmbeddings(email.bodySnippet || '');
-    //     // console.log(bodyEmbedding)
-    //     await oramaManager.insert({
-    //         title: email.subject,
-    //         body: email.bodySnippet,
-    //         from: `${email.from.name} <${email.from.address}>`,
-    //         to: email.to.map(t => `${t.name} <${t.address}>`),
-    //         sentAt: email.sentAt.getTime(),
-    //         // bodyEmbedding: bodyEmbedding,
-    //     })
-    // }))
-
-
-    // Search
-    const searchResults = await oramaManager.search({
-        term: "cascading",
+    // ✅ Create Orama schema
+    this.db = await create({
+      schema: {
+        id: "string",
+        threadId: "string",
+        title: "string",
+        from: "string",
+        to: "string[]",
+        rawBody: "string",
+      },
     });
 
-    console.log(searchResults.hits.map((hit) => hit.document));
-}
+    console.log("📨 [OramaManager] Fetching emails for account:", this.accountId);
 
-// main().catch(console.error);
+    // ✅ Fetch recent emails related to this account (joined via Thread → Account)
+    const emails = await this.prisma.email.findMany({
+      where: {
+        thread: {
+          accountId: this.accountId,
+        },
+      },
+      select: {
+        id: true,
+        threadId: true,
+        subject: true,
+        bodySnippet: true,
+        from: {
+          select: {
+            address: true,
+          },
+        },
+        to: {
+          select: {
+            address: true,
+          },
+        },
+      },
+      orderBy: {
+        sentAt: "desc",
+      },
+      take: 300, // Limit for performance
+    });
+
+    console.log(`✅ [OramaManager] Found ${emails.length} emails for indexing.`);
+
+    if (!emails.length) {
+      console.warn("⚠️ [OramaManager] No emails found for account:", this.accountId);
+      return;
+    }
+
+    // ✅ Format and insert emails into Orama DB
+    const formattedEmails = emails.map((email) => ({
+      id: email.id,
+      threadId: email.threadId,
+      title: email.subject || "(No Subject)",
+      from: email.from?.address || "Unknown",
+      to: email.to?.map((t) => t.address) || [],
+      rawBody: email.bodySnippet || "",
+    }));
+
+    await insertMultiple(this.db, formattedEmails);
+
+    console.log("🧾 [OramaManager] Inserted emails into Orama:", formattedEmails.length);
+  }
+
+  // 🔍 Perform full-text search
+  async search({ term }: { term: string }) {
+    if (!this.db) throw new Error("❌ Orama database not initialized");
+
+    console.log(`🔎 [OramaManager] Searching for "${term}"...`);
+
+    const results = await search(this.db, { term });
+
+    console.log("📊 [OramaManager] Search complete. Hits:", results.hits.length);
+
+    return results;
+  }
+
+  // Vector search wrapper
+  async vectorSearch({ prompt }: { prompt: string }): Promise<Results<any>> {
+    return this.search({ term: prompt });
+  }
+
+}

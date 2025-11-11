@@ -1,13 +1,12 @@
 import "@/styles/globals.css";
-import Kbar from "@/app/mail/components/kbar";
 import { ClerkProvider } from "@clerk/nextjs";
-
 import { GeistSans } from "geist/font/sans";
 import { type Metadata } from "next";
 
-import { TRPCReactProvider } from "@/trpc/react";
-import { ThemeProvider } from "@/components/theme-provicer";
+import { TRPCReactProvider } from "@/trpc/react.tsx";
+import { ThemeProvider } from "@/components/theme-provider.tsx";
 import { Toaster } from "sonner";
+import KbarWrapper from "@/components/kbar-wrapper.tsx";
 
 export const metadata: Metadata = {
   title: "Normal Human",
@@ -18,14 +17,23 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <ClerkProvider>
+    <ClerkProvider
+      publishableKey={process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
+      signInUrl={process.env.NEXT_PUBLIC_CLERK_SIGN_IN_URL}
+      signUpUrl={process.env.NEXT_PUBLIC_CLERK_SIGN_UP_URL}
+      afterSignInUrl="/mail"
+      afterSignUpUrl="/mail"
+    >
       <html lang="en" className={`${GeistSans.variable}`}>
         <body>
-          <ThemeProvider attribute='class' defaultTheme='system' enableSystem disableTransitionOnChange>
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="system"
+            enableSystem
+            disableTransitionOnChange
+          >
             <TRPCReactProvider>
-              <Kbar>
-                {children}
-              </Kbar>
+              <KbarWrapper>{children}</KbarWrapper>
             </TRPCReactProvider>
             <Toaster />
           </ThemeProvider>

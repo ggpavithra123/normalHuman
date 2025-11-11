@@ -114,4 +114,4 @@ const isAuth = t.middleware(({ next, ctx }) => {
  * are logged in.
  */
 export const publicProcedure = t.procedure.use(timingMiddleware);
-export const protectedProcedure = t.procedure.use(isAuth);
+export const protectedProcedure = t.procedure.use(timingMiddleware).use(isAuth);

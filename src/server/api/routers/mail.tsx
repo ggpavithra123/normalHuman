@@ -1,25 +1,31 @@
 import { z } from "zod";
-import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
-import Account from "@/lib/account";
-import { syncEmailsToDatabase } from "@/lib/sync-to-db";
-import { db } from "@/server/db";
-import { getEmailDetails } from "@/lib/aurinko";
+import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc.ts";
+import Account from "@/lib/account.ts";
+import { syncEmailsToDatabase } from "@/lib/sync-to-db.ts";
+import { db } from "@/server/db.ts";
+import { getEmailDetails } from "@/lib/aurinko.ts";
 import type { Prisma } from "@prisma/client";
-import { emailAddressSchema } from "@/lib/types";
-import { FREE_CREDITS_PER_DAY } from "@/app/constants";
+import { emailAddressSchema } from "@/lib/types.ts";
+import { FREE_CREDITS_PER_DAY } from "@/app/constants.ts";
 
 export const authoriseAccountAccess = async (accountId: string, userId: string) => {
     const account = await db.account.findFirst({
-        where: {
-            id: accountId,
-            userId: userId,
-        },
-        select: {
-            id: true, emailAddress: true, name: true, token: true
-        }
-    })
-    if (!account) throw new Error("Invalid token")
-    return account
+    where: { userId },
+    select: {
+      id: true,
+      emailAddress: true,
+      name: true,
+      token: true,
+    },
+    orderBy: {
+      id: 'desc', // fetch the account with the highest id = latest
+    },
+  });
+
+  if (!account) throw new Error("No account found for this user");
+
+  console.log("✅ Latest account fetched:", account.id, account.emailAddress);
+  return account;
 }
 
 const inboxFilter = (accountId: string): Prisma.ThreadWhereInput => ({
@@ -47,28 +53,34 @@ export const mailRouter = createTRPCRouter({
             }
         })
     }),
-    getNumThreads: protectedProcedure.input(z.object({
-        accountId: z.string(),
-        tab: z.string()
-    })).query(async ({ ctx, input }) => {
-        const account = await authoriseAccountAccess(input.accountId, ctx.auth.userId)
-        let filter: Prisma.ThreadWhereInput = {}
-        if (input.tab === "inbox") {
-            filter = inboxFilter(account.id)
-        } else if (input.tab === "sent") {
-            filter = sentFilter(account.id)
-        } else if (input.tab === "drafts") {
-            filter = draftFilter(account.id)
-        }
-        return await ctx.db.thread.count({
-            where: filter
-        })
-    }),
+    
+    getNumThreads: protectedProcedure
+        .input(z.object({
+            accountId: z.string(),
+            tab: z.string()
+        }))
+        .query(async ({ ctx, input }: { ctx: { auth: { userId: string }; db: any }; input: { accountId: string; tab: string } }) => {
+            console.log('🔍 [getNumThreads] Called with:', { accountId: input.accountId, tab: input.tab, userId: ctx.auth.userId })
+            const account = await authoriseAccountAccess(input.accountId, ctx.auth.userId)
+            let filter: Prisma.ThreadWhereInput = {}
+            if (input.tab === "inbox") {
+                filter = inboxFilter(account.id)
+            } else if (input.tab === "sent") {
+                filter = sentFilter(account.id)
+            } else if (input.tab === "drafts") {
+                filter = draftFilter(account.id)
+            }
+            const count = await ctx.db.thread.count({
+                where: filter
+            })
+            console.log('✅ [getNumThreads] Result:', { tab: input.tab, count })
+            return count
+        }),
     getThreads: protectedProcedure.input(z.object({
         accountId: z.string(),
         tab: z.string(),
         done: z.boolean()
-    })).query(async ({ ctx, input }) => {
+    })).query(async ({ ctx, input }: { ctx: { auth: { userId: string }; db: any }; input: { accountId: string; tab: string; done: boolean } }) => {
         const account = await authoriseAccountAccess(input.accountId, ctx.auth.userId)
 
         let filter: Prisma.ThreadWhereInput = {}
@@ -114,7 +126,7 @@ export const mailRouter = createTRPCRouter({
     getThreadById: protectedProcedure.input(z.object({
         accountId: z.string(),
         threadId: z.string()
-    })).query(async ({ ctx, input }) => {
+    })).query(async ({ ctx, input }: { ctx: { auth: { userId: string }; db: any }; input: { accountId: string; threadId: string } }) => {
         const account = await authoriseAccountAccess(input.accountId, ctx.auth.userId)
         return await ctx.db.thread.findUnique({
             where: { id: input.threadId },
@@ -138,69 +150,96 @@ export const mailRouter = createTRPCRouter({
         })
     }),
 
-    getReplyDetails: protectedProcedure.input(z.object({
+    getReplyDetails: protectedProcedure
+    .input(
+      z.object({
         accountId: z.string(),
         threadId: z.string(),
-        replyType: z.enum(['reply', 'replyAll'])
-    })).query(async ({ ctx, input }) => {
-        const account = await authoriseAccountAccess(input.accountId, ctx.auth.userId)
-
+        replyType: z.enum(["reply", "replyAll"]),
+      })
+    )
+    .query(
+      async ({
+        ctx,
+        input,
+      }: {
+        ctx: { auth: { userId: string }; db: any };
+        input: { accountId: string; threadId: string; replyType: "reply" | "replyAll" };
+      }) => {
+        const account = await authoriseAccountAccess(input.accountId, ctx.auth.userId);
+  
         const thread = await ctx.db.thread.findUnique({
-            where: { id: input.threadId },
-            include: {
-                emails: {
-                    orderBy: { sentAt: 'asc' },
-                    select: {
-                        from: true,
-                        to: true,
-                        cc: true,
-                        bcc: true,
-                        sentAt: true,
-                        subject: true,
-                        internetMessageId: true,
-                    },
-                },
+          where: { id: input.threadId },
+          include: {
+            emails: {
+              orderBy: { sentAt: "asc" },
+              select: {
+                from: true,
+                to: true,
+                cc: true,
+                bcc: true,
+                sentAt: true,
+                subject: true,
+                internetMessageId: true,
+              },
             },
+          },
         });
-
+  
         if (!thread || thread.emails.length === 0) {
-            throw new Error("Thread not found or empty");
+          throw new Error("Thread not found or empty");
         }
-
-        const lastExternalEmail = thread.emails
-            .reverse()
-            .find(email => email.from.id !== account.id);
-
+  
+        type EmailType = {
+          from: { id: string };
+          to: { id: string }[];
+          cc: { id: string }[];
+          bcc: { id: string }[];
+          sentAt: Date;
+          subject: string;
+          internetMessageId: string;
+        };
+  
+        const lastExternalEmail = [...thread.emails]
+          .reverse()
+          .find((email: EmailType) => email.from.id !== account.id);
+  
         if (!lastExternalEmail) {
-            throw new Error("No external email found in thread");
+          throw new Error("No external email found in thread");
         }
-
-        const allRecipients = new Set([
-            ...thread.emails.flatMap(e => [e.from, ...e.to, ...e.cc]),
-        ]);
-
-        if (input.replyType === 'reply') {
-            return {
-                to: [lastExternalEmail.from],
-                cc: [],
-                from: { name: account.name, address: account.emailAddress },
-                subject: `${lastExternalEmail.subject}`,
-                id: lastExternalEmail.internetMessageId
-            };
-        } else if (input.replyType === 'replyAll') {
-            return {
-                to: [lastExternalEmail.from, ...lastExternalEmail.to.filter(addr => addr.id !== account.id)],
-                cc: lastExternalEmail.cc.filter(addr => addr.id !== account.id),
-                from: { name: account.name, address: account.emailAddress },
-                subject: `${lastExternalEmail.subject}`,
-                id: lastExternalEmail.internetMessageId
-            };
+  
+        
+        const allRecipients = new Set(
+          thread.emails.flatMap((e: EmailType) => [e.from, ...e.to, ...e.cc])
+        );
+  
+        if (input.replyType === "reply") {
+          return {
+            to: [lastExternalEmail.from],
+            cc: [],
+            from: { name: account.name, address: account.emailAddress },
+            subject: `${lastExternalEmail.subject}`,
+            id: lastExternalEmail.internetMessageId,
+          };
+        } else if (input.replyType === "replyAll") {
+          return {
+            to: [
+              lastExternalEmail.from,
+              ...lastExternalEmail.to.filter((addr: { id: string }) => addr.id !== account.id),
+            ],
+            cc: lastExternalEmail.cc.filter((addr: { id: string }) => addr.id !== account.id),
+            from: { name: account.name, address: account.emailAddress },
+            subject: `${lastExternalEmail.subject}`,
+            id: lastExternalEmail.internetMessageId,
+          };
         }
-    }),
+      }
+    ),
+  
 
     syncEmails: protectedProcedure.input(z.object({
         accountId: z.string()
-    })).mutation(async ({ ctx, input }) => {
+    })).mutation(async ({ ctx, input }: { ctx: { auth: { userId: string }; db: any }; input: { accountId: string } }) => {
         const account = await authoriseAccountAccess(input.accountId, ctx.auth.userId)
         if (!account) throw new Error("Invalid token")
         const acc = new Account(account.token)
